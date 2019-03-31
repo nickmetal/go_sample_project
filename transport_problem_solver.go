@@ -8,15 +8,15 @@ import (
 )
 
 type Cell struct {
-	x        int     // row index
-	y        int     // column index
-	price    float64 // transporting price from producers to consumers
+	x int // row index
+	y int // column index
+	// price    float64 // transporting price from producers to consumers
 	consumed float64 // represent value of needs which was provided from consumer
 	marked   bool    // mark as processed by NorthWest Method
 }
 
 func (c Cell) String() string {
-	return fmt.Sprintf("s{x:%d y:%d con:%f mark:%v}", c.x, c.y, c.consumed, c.marked)
+	return fmt.Sprintf("s{x:%d y:%d con:%g mark:%v}", c.x, c.y, c.consumed, c.marked)
 }
 
 func (c Cell) Print() { fmt.Printf("%s\n", c) }
@@ -27,7 +27,7 @@ func printNeedsAndSourcesState(m Message, extra ...interface{}) {
 	}
 
 	fmt.Printf(
-		"%vneeds: %v\nsources: %v\n",
+		"%vneeds:   %v\nsources: %v\n",
 		s,
 		m.ConsumersNeeds,
 		m.ProducersSources,
@@ -56,53 +56,57 @@ func IntContainsInSlice(value int, s []int) bool {
 	- check is input data do closed type problem (all need and sources are equaled)
 	- check counts needs and sources with prices col and rows num
 
+	column based matrix: slice of matrix columns
 */
 func initPriceMatrix(m Message) *PriceMatrix {
+	// consumersNums := len(m.ConsumersNeeds)
 	pm := make(PriceMatrix, 0)
-	for rowIdx, row := range m.Prices {
-		pm = append(pm, []Cell{})
-		for columnIdx, cellValue := range row {
-			cell := Cell{x: rowIdx, y: columnIdx, price: cellValue}
-			pm[rowIdx] = append(pm[rowIdx], cell)
+
+	for y, _ := range m.ConsumersNeeds {
+		columnSlice := make([]Cell, 0)
+
+		for x, _ := range m.ProducersSources {
+			columnSlice = append(columnSlice, Cell{x: y, y: x}) // todo add transportation price
 		}
+		pm = append(pm, columnSlice)
 	}
 	return &pm
 }
 
 func findBasicSolution(pm *PriceMatrix, m *Message) {
+	matrix := *(pm)
+	inputs := *(m)
+	// producersCount := len(inputs.ProducersSources) consumerXYneeds
+	// consumersCount := len(inputs.ConsumersNeeds) producerXYsources
 
-	for rId, row := range m.Prices {
-		// for columnIdx, cellValue := range row {
-		for cId, _ := range row {
-			matrix := *(pm)
-			inputs := *(m)
+	for cId, column := range matrix {
+		for rId, cell := range column {
 
-			if matrix[rId][cId].marked {
-				fmt.Printf("  [value] for matrix[x,y]: %s IS SKIPPED =0 \n", matrix[rId][cId])
+			if cell.consumed != float64(0) {
+				fmt.Printf("  [value] for matrix[x,y]: %s IS SKIPPED =0 \n", cell)
 				continue
 			}
-			fmt.Printf("  [value] for matrix[x,y]: %s \n", matrix[rId][cId])
+			fmt.Printf("  [value] for matrix[x,y]: %s \n", cell)
 
-			if inputs.ProducersSources[rId] <= 0 {
+			if inputs.ProducersSources[rId] < 0 {
 				item := matrix[rId][cId]
 				panic(fmt.Sprintf("ProducersSources is empty for (%v %v): %v\n", item.x, item.y, inputs.ProducersSources[rId]))
 			}
 
 			consumed := math.Min(inputs.ProducersSources[rId], inputs.ConsumersNeeds[cId])
-			matrix[rId][cId].consumed = consumed
+			cell.consumed = consumed
+			cell.marked = true
+			matrix[cId][rId] = cell
+
+			if inputs.ConsumersNeeds[cId] == 0 && rId == 0 {
+				panic(fmt.Sprintf("found cell with out needs: %s \n", cell))
+			}
 
 			printNeedsAndSourcesState(inputs)
 			inputs.ConsumersNeeds[cId] -= consumed
 			inputs.ProducersSources[rId] -= consumed
 			printNeedsAndSourcesState(inputs)
 
-			// if we provide full needs
-			if inputs.ConsumersNeeds[cId] == 0 {
-				fmt.Printf("found full: %s \n", matrix[rId][cId])
-				markColumnCellsAsSkipped(pm, cId, rId)
-				fmt.Println("")
-				break
-			}
 			fmt.Println("")
 		}
 		fmt.Println(strings.Repeat("===", 15))
@@ -147,8 +151,14 @@ func main() {
 		panic(err)
 	}
 
-	priceMatrix := initPriceMatrix(message)
-	findBasicSolution(priceMatrix, &message) // TODO add copy of message
+	basicSolutionMatrix := initPriceMatrix(message)
+	// priceMatrix = findBasicSolution(priceMatrix, &message) // TODO add copy of message
+	findBasicSolution(basicSolutionMatrix, &message) // TODO add copy of message
+	errors := validateBasicSolution(basicSolutionMatrix)
+	if errors != nil {
+		panic(errors)
+	}
+
 	printPM(*priceMatrix)
 	fmt.Printf("sources in the end: %v", message.ProducersSources)
 
