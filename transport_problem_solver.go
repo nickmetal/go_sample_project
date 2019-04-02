@@ -40,9 +40,8 @@ type Message struct {
 	ConsumersNeeds   []float64   `json:"consumers_needs"`
 }
 
-func (pm *PriceMatrix) findBasicSolution(m *Message) {
+func (pm *PriceMatrix) findBasicSolution(inputs Message) {
 	matrix := *(pm)
-	inputs := *(m)
 
 	for cId, column := range matrix {
 		for rId, cell := range column {
@@ -135,7 +134,7 @@ func (m PriceMatrix) validateBasicSolution(message Message) []error {
 	return errorSlice
 }
 
-func (m *PriceMatrix) calculatePotentials(message Message) {
+func (m *PriceMatrix) calculatePotentials(message Message) (*[]float64, *[]float64) {
 	matrix := *(m)
 	consumerPotentials := make([]float64, len(message.ConsumersNeeds))
 	// todo rename to providers etc
@@ -168,6 +167,7 @@ func (m *PriceMatrix) calculatePotentials(message Message) {
 		fmt.Printf("[%d]: sourPots %v \n", rId, sourcesPotentials)
 		fmt.Printf("[%d]: consPots %v \n", rId, consumerPotentials)
 	}
+	return &sourcesPotentials, &consumerPotentials
 }
 
 type PriceMatrix [][]Cell
@@ -233,7 +233,7 @@ func main() {
 	}
 
 	basicSolutionMatrix := initPriceMatrix(message)
-	basicSolutionMatrix.findBasicSolution(&message)
+	basicSolutionMatrix.findBasicSolution(message)
 	errorSlice := basicSolutionMatrix.validateBasicSolution(message)
 
 	if errorSlice != nil {
@@ -243,7 +243,8 @@ func main() {
 		}
 		return
 	}
-	basicSolutionMatrix.calculatePotentials(message)
+
+	sourcesPotentials, consumerPotentials := basicSolutionMatrix.calculatePotentials(message)
 
 	printPM(*basicSolutionMatrix)
 	fmt.Printf("sources in the end: %v", message.ProducersSources)
