@@ -8,15 +8,15 @@ import (
 )
 
 type Cell struct {
-	x int // row index
-	y int // column index
-	// price    float64 // transporting price from producers to consumers
+	x        int     // row index
+	y        int     // column index
+	price    float64 // transporting price from producers to consumers
 	consumed float64 // represent value of needs which was provided from consumer
-	marked   bool    // mark as processed by NorthWest Method
+	// potential float64
 }
 
 func (c Cell) String() string {
-	return fmt.Sprintf("s{x:%d y:%d con:%g mark:%v}", c.x, c.y, c.consumed, c.marked)
+	return fmt.Sprintf("s{x:%d y:%d con:%g, price:%g}", c.x, c.y, c.consumed, c.price)
 }
 
 func (c Cell) Print() { fmt.Printf("%s\n", c) }
@@ -38,6 +38,136 @@ type Message struct {
 	Prices           [][]float64 `json:"prices"`
 	ProducersSources []float64   `json:"producers_sources"`
 	ConsumersNeeds   []float64   `json:"consumers_needs"`
+}
+
+func (pm *PriceMatrix) findBasicSolution(m *Message) {
+	matrix := *(pm)
+	inputs := *(m)
+
+	for cId, column := range matrix {
+		for rId, cell := range column {
+
+			// todo check without float64 and remote it
+			if cell.consumed != 0 {
+				fmt.Printf("  [value] for matrix[x,y]: %s IS SKIPPED =0 \n", cell)
+				continue
+			}
+			fmt.Printf("  [value] for matrix[x,y]: %s \n", cell)
+
+			if inputs.ProducersSources[rId] < 0 {
+				item := matrix[rId][cId]
+				panic(fmt.Sprintf("ProducersSources is empty for (%v %v): %v\n", item.x, item.y, inputs.ProducersSources[rId]))
+			}
+
+			consumed := math.Min(inputs.ProducersSources[rId], inputs.ConsumersNeeds[cId])
+			cell.consumed = consumed
+			matrix[cId][rId] = cell
+
+			if inputs.ConsumersNeeds[cId] == 0 && rId == 0 {
+				panic(fmt.Sprintf("found cell with out needs: %s \n", cell))
+			}
+
+			// printNeedsAndSourcesState(inputs)
+			inputs.ConsumersNeeds[cId] -= consumed
+			inputs.ProducersSources[rId] -= consumed
+			// printNeedsAndSourcesState(inputs)
+
+			fmt.Println("")
+		}
+		fmt.Println(strings.Repeat("===", 15))
+	}
+}
+
+func (m PriceMatrix) validateBasicSolution(message Message) []error {
+	errorSlice := make([]error, 0)
+
+	// Проверка, что все поставщики израсходовали свои запасы
+	sourcesSum := 0.0
+	for _, value := range message.ProducersSources {
+		sourcesSum += value
+	}
+
+	if sourcesSum != 0 {
+		errorSlice = append(
+			errorSlice,
+			fmt.Errorf("All sources should  be empty. Now total sum of sources: %g", sourcesSum),
+		)
+	}
+
+	// Проверка, что все потребители получили желаемое количество единиц товара
+	needsSum := 0.0
+	for _, value := range message.ConsumersNeeds {
+		needsSum += value
+	}
+
+	if needsSum != 0 {
+		errorSlice = append(
+			errorSlice,
+			fmt.Errorf("All need should be empty. Now total sum of needs: %g", needsSum),
+		)
+	}
+
+	/*
+		Проверка плана на вырожденность.
+		Базисных ячеек таблицы должно быть не менее m+n-1
+		где m и n — соответственно, число поставщиков и потребителей,
+		иначе решение считается вырожденным
+	*/
+	basicCellNum := 0
+	for _, column := range m {
+		for _, cell := range column {
+			if cell.consumed != 0 {
+				basicCellNum += 1
+			}
+		}
+	}
+
+	if basicCellNum < len(m)+len(m[0])-1 {
+		errorSlice = append(
+			errorSlice,
+			fmt.Errorf("basic plan вырожденный: basicCellNum: %d, m+n=%d", basicCellNum, len(m)+len(m[0])-1),
+		)
+	}
+
+	if len(errorSlice) == 0 {
+		return nil
+	}
+	return errorSlice
+}
+
+func (m *PriceMatrix) calculatePotentials(message Message) {
+	matrix := *(m)
+	consumerPotentials := make([]float64, len(message.ConsumersNeeds))
+	// todo rename to providers etc
+	sourcesPotentials := make([]float64, len(message.ProducersSources))
+
+	var currentConsumerP float64
+	var currentSourceP float64
+
+	for rId, row := range message.Prices {
+		for cId, price := range row {
+			if cId == 0 && rId == 0 {
+				consumerPotentials[0] = price
+				continue
+			}
+
+			// non basic cell
+			if matrix[cId][rId].consumed == 0 {
+				continue
+			}
+			if rId != 0 && sourcesPotentials[rId] == 0 {
+				currentSourceP = price - currentConsumerP
+				sourcesPotentials[rId] = currentSourceP
+			}
+
+			if consumerPotentials[cId] == 0 {
+				currentConsumerP = price - currentSourceP
+				consumerPotentials[cId] = currentConsumerP
+			}
+		}
+		fmt.Printf("[%d]: sourPots %v \n", rId, sourcesPotentials)
+		fmt.Printf("[%d]: consPots %v \n", rId, consumerPotentials)
+	}
 }
 
 type PriceMatrix [][]Cell
@@ -66,60 +196,11 @@ func initPriceMatrix(m Message) *PriceMatrix {
 		columnSlice := make([]Cell, 0)
 
 		for x, _ := range m.ProducersSources {
-			columnSlice = append(columnSlice, Cell{x: y, y: x}) // todo add transportation price
+			columnSlice = append(columnSlice, Cell{x: y, y: x, price: m.Prices[x][y]})
 		}
 		pm = append(pm, columnSlice)
 	}
 	return &pm
-}
-
-func findBasicSolution(pm *PriceMatrix, m *Message) {
-	matrix := *(pm)
-	inputs := *(m)
-	// producersCount := len(inputs.ProducersSources) consumerXYneeds
-	// consumersCount := len(inputs.ConsumersNeeds) producerXYsources
-
-	for cId, column := range matrix {
-		for rId, cell := range column {
-
-			if cell.consumed != float64(0) {
-				fmt.Printf("  [value] for matrix[x,y]: %s IS SKIPPED =0 \n", cell)
-				continue
-			}
-			fmt.Printf("  [value] for matrix[x,y]: %s \n", cell)
-
-			if inputs.ProducersSources[rId] < 0 {
-				item := matrix[rId][cId]
-				panic(fmt.Sprintf("ProducersSources is empty for (%v %v): %v\n", item.x, item.y, inputs.ProducersSources[rId]))
-			}
-
-			consumed := math.Min(inputs.ProducersSources[rId], inputs.ConsumersNeeds[cId])
-			cell.consumed = consumed
-			cell.marked = true
-			matrix[cId][rId] = cell
-
-			if inputs.ConsumersNeeds[cId] == 0 && rId == 0 {
-				panic(fmt.Sprintf("found cell with out needs: %s \n", cell))
-			}
-
-			printNeedsAndSourcesState(inputs)
-			inputs.ConsumersNeeds[cId] -= consumed
-			inputs.ProducersSources[rId] -= consumed
-			printNeedsAndSourcesState(inputs)
-
-			fmt.Println("")
-		}
-		fmt.Println(strings.Repeat("===", 15))
-	}
-}
-
-// mark all cells in column except consumed
-func markColumnCellsAsSkipped(pm *PriceMatrix, columnIndex int, rowIdx int) {
-	matrix := *(pm)
-	for rId := range matrix {
-		matrix[rId][columnIndex].marked = true
-		fmt.Printf("marked item: %s\n", matrix[rId][columnIndex])
-	}
 }
 
 func printPM(pm PriceMatrix) {
@@ -152,14 +233,19 @@ func main() {
 	}
 
 	basicSolutionMatrix := initPriceMatrix(message)
-	// priceMatrix = findBasicSolution(priceMatrix, &message) // TODO add copy of message
-	findBasicSolution(basicSolutionMatrix, &message) // TODO add copy of message
-	errors := validateBasicSolution(basicSolutionMatrix)
-	if errors != nil {
-		panic(errors)
-	}
+	basicSolutionMatrix.findBasicSolution(&message)
+	errorSlice := basicSolutionMatrix.validateBasicSolution(message)
 
-	printPM(*priceMatrix)
+	if errorSlice != nil {
+		fmt.Println("Errors:")
+		for _, validationError := range errorSlice {
+			fmt.Println(validationError)
+		}
+		return
+	}
+	basicSolutionMatrix.calculatePotentials(message)
+
+	printPM(*basicSolutionMatrix)
 	fmt.Printf("sources in the end: %v", message.ProducersSources)
 
 	fmt.Println("done")
