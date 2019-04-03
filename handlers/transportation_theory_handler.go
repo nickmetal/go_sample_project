@@ -1,9 +1,12 @@
-package main
+package handlers
 
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"math"
+	"net/http"
 	"strings"
 )
 
@@ -215,22 +218,22 @@ func printPM(pm PriceMatrix) {
 	}
 }
 
-func main() {
-	msg := []byte(`{
-		"consumers_needs": [20, 30, 30, 10], 
-		"producers_sources": [30, 40, 20], 
-		"prices": [
-			[2, 3, 2, 4],
-			[3, 2, 5, 1],
-			[4, 3, 2, 6]
-		]
-	}`)
+func Solve(message Message) {
+	// msg := []byte(`{
+	// 	"consumers_needs": [20, 30, 30, 10],
+	// 	"producers_sources": [30, 40, 20],
+	// 	"prices": [
+	// 		[2, 3, 2, 4],
+	// 		[3, 2, 5, 1],
+	// 		[4, 3, 2, 6]
+	// 	]
+	// }`)
 
-	message := Message{}
+	// message := Message{}
 
-	if err := json.Unmarshal(msg, &message); err != nil {
-		panic(err)
-	}
+	// if err := json.Unmarshal(msg, &message); err != nil {
+	// 	panic(err)
+	// }
 
 	basicSolutionMatrix := initPriceMatrix(message)
 	basicSolutionMatrix.findBasicSolution(message)
@@ -243,11 +246,42 @@ func main() {
 		}
 		return
 	}
-
 	sourcesPotentials, consumerPotentials := basicSolutionMatrix.calculatePotentials(message)
+	fmt.Printf("sourcesPotentials: %v", sourcesPotentials)
+	fmt.Printf("consumerPotentials : %v", consumerPotentials)
 
 	printPM(*basicSolutionMatrix)
 	fmt.Printf("sources in the end: %v", message.ProducersSources)
 
 	fmt.Println("done")
+}
+
+func TransportIssueHandler(resp http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodPost:
+		body, err := ioutil.ReadAll(req.Body)
+		defer req.Body.Close()
+
+		if err != nil {
+			http.Error(resp, err.Error(), 500)
+			log.Println("POST body read error", err)
+			return
+		}
+		log.Println("POST request", string(body))
+
+		message := Message{}
+
+		if err := json.Unmarshal(body, &message); err != nil {
+			log.Println("POST body unmarshal error", err)
+			http.Error(resp, err.Error(), 500)
+			return
+		}
+
+		Solve(message)
+		resp.Write([]byte("{}"))
+
+	default:
+		http.Error(resp, "unsupported method", 400)
+		log.Printf("unsupported method: %s\n", req.Method)
+	}
 }
