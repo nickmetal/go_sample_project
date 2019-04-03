@@ -11,6 +11,16 @@
 
     <title>Hello, world!</title>
   </head>
+
+  <div id="notification_panel">
+  </div>
+
+  <center><h3>Select Price Matrix size</h3></center>
+  <input id="rows_count" class="form-control" type="number" placeholder="Rows number">
+  <input id="columns_count" class="form-control" type="number" placeholder="Columns number">
+  </br>
+  <button onclick="createMatrix()" type="button" class="btn btn-secondary">Create Price Matrix</button>
+  </br>
   <body>
     <div id="app">
       <div class="table-responsive">
@@ -46,59 +56,8 @@
         </table>
       </div>
     </div>
-
-    <!-- Optional JavaScript -->
-    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
-    <!-- <script src="{{.StaticRoute}}js/jquery-3.3.1.slim.min.js"></script> -->
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.10/dist/vue.js"></script>
-    <script>
-    var app = new Vue({
-      el: '#app',
-      delimiters: ['${', '}'],
-      data: {
-        message: 'Hello Vue!'
-      },
-        methods: {
-          reverseMessage: async function () {
-            const requestData = {
-              consumers_needs: [20, 30, 30, 10],
-           		producers_sources: [30, 40, 20],
-           		prices: [
-           			[2, 3, 2, 4],
-           			[3, 2, 5, 1],
-                [4, 3, 2, 6],
-              ],
-            }
-            const requestOptions = {
-              method: "POST",
-              headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-              body: JSON.stringify(requestData)
-           }
-            const apiURL = `/transport-issue/`;
-            //const apiURL = `'https://api.coindesk.com/v1/bpi/currentprice.json'`
-            try {
-              //debugger;
-              const response = await fetch(apiURL, requestOptions);
-              if (response.status !== 200) {
-                const errorText = await response.text();
-                console.log('res text', errorText)
-                this.message = errorText;
-                return 
-              }
-
-              const data = await response.text();
-              console.log('res', data)
-              this.message = data;
-            } catch(err) {
-              console.log('err', err)
-              this.message = "error";
-            }
-
-          }
-    }
-    })
-    
-    </script>
+    <script src="{{.StaticRoute}}js/main.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
   </body>
