@@ -1,5 +1,7 @@
 package handlers
 
+// package main
+
 import (
 	"encoding/json"
 	"fmt"
@@ -11,15 +13,15 @@ import (
 )
 
 type Cell struct {
-	x        int     // row index
-	y        int     // column index
-	price    float64 // transporting price from producers to consumers
-	consumed float64 // represent value of needs which was provided from consumer
-	// potential float64
+	x              int     // row index
+	y              int     // column index
+	price          float64 // transporting price from producers to consumers
+	consumed       float64 // represent value of needs which was provided from consumer
+	cellDifference float64 // ΔCij = Cij – (Ui + Vj ) difference
 }
 
 func (c Cell) String() string {
-	return fmt.Sprintf("s{x:%d y:%d con:%g, price:%g}", c.x, c.y, c.consumed, c.price)
+	return fmt.Sprintf("s{x:%d y:%d con:%g price:%g diff:%g }", c.x, c.y, c.consumed, c.price, c.cellDifference)
 }
 
 func (c Cell) Print() { fmt.Printf("%s\n", c) }
@@ -49,15 +51,14 @@ func (pm *PriceMatrix) findBasicSolution(inputs Message) {
 	for cId, column := range matrix {
 		for rId, cell := range column {
 
-			// todo check without float64 and remote it
 			if cell.consumed != 0 {
-				fmt.Printf("  [value] for matrix[x,y]: %s IS SKIPPED =0 \n", cell)
 				continue
 			}
-			fmt.Printf("  [value] for matrix[x,y]: %s \n", cell)
+			// fmt.Printf("  [value] for matrix[x,y]: %s \n", cell)
 
 			if inputs.ProducersSources[rId] < 0 {
 				item := matrix[rId][cId]
+				// todo return error
 				panic(fmt.Sprintf("ProducersSources is empty for (%v %v): %v\n", item.x, item.y, inputs.ProducersSources[rId]))
 			}
 
@@ -66,6 +67,7 @@ func (pm *PriceMatrix) findBasicSolution(inputs Message) {
 			matrix[cId][rId] = cell
 
 			if inputs.ConsumersNeeds[cId] == 0 && rId == 0 {
+				// todo return error
 				panic(fmt.Sprintf("found cell with out needs: %s \n", cell))
 			}
 
@@ -73,10 +75,9 @@ func (pm *PriceMatrix) findBasicSolution(inputs Message) {
 			inputs.ConsumersNeeds[cId] -= consumed
 			inputs.ProducersSources[rId] -= consumed
 			// printNeedsAndSourcesState(inputs)
-
-			fmt.Println("")
+			// fmt.Println("")
 		}
-		fmt.Println(strings.Repeat("===", 15))
+		// fmt.Println(strings.Repeat("===", 15))
 	}
 }
 
@@ -137,6 +138,32 @@ func (m PriceMatrix) validateBasicSolution(message Message) []error {
 	return errorSlice
 }
 
+func (m *PriceMatrix) calculateDifferencesForOptimum(sp *[]float64, cp *[]float64) bool {
+	sourcesPotentials := *sp
+	consumerPotentials := *cp
+	foundOptimum := true
+
+	for cId, column := range *m {
+		for rId, cell := range column {
+			// skip consumed cells
+			if cell.consumed != 0 {
+				continue
+			}
+			// log.Printf("sourcesPotential: %v\n", sourcesPotentials[rId])
+			cellDifference := cell.price - sourcesPotentials[rId] - consumerPotentials[cId]
+			cell.cellDifference = cellDifference
+			(*m)[cId][rId] = cell
+			// log.Printf("[%s] [cellDifference %v]: p:%v sp:%v cp:%v\n", (*m)[cId][rId], cellDifference, cell.price, sourcesPotentials[rId], consumerPotentials[cId])
+
+			if cellDifference < 0 {
+				foundOptimum = false
+				// log.Printf("[%s] foundOptimum false with value: %v\n", (*m)[cId][rId], cellDifference)
+			}
+		}
+	}
+	return foundOptimum
+}
+
 func (m *PriceMatrix) calculatePotentials(message Message) (*[]float64, *[]float64) {
 	matrix := *(m)
 	consumerPotentials := make([]float64, len(message.ConsumersNeeds))
@@ -167,8 +194,6 @@ func (m *PriceMatrix) calculatePotentials(message Message) (*[]float64, *[]float
 				consumerPotentials[cId] = currentConsumerP
 			}
 		}
-		fmt.Printf("[%d]: sourPots %v \n", rId, sourcesPotentials)
-		fmt.Printf("[%d]: consPots %v \n", rId, consumerPotentials)
 	}
 	return &sourcesPotentials, &consumerPotentials
 }
@@ -219,22 +244,6 @@ func printPM(pm PriceMatrix) {
 }
 
 func Solve(message Message) {
-	// msg := []byte(`{
-	// 	"consumers_needs": [20, 30, 30, 10],
-	// 	"producers_sources": [30, 40, 20],
-	// 	"prices": [
-	// 		[2, 3, 2, 4],
-	// 		[3, 2, 5, 1],
-	// 		[4, 3, 2, 6]
-	// 	]
-	// }`)
-
-	// message := Message{}
-
-	// if err := json.Unmarshal(msg, &message); err != nil {
-	// 	panic(err)
-	// }
-
 	basicSolutionMatrix := initPriceMatrix(message)
 	basicSolutionMatrix.findBasicSolution(message)
 	errorSlice := basicSolutionMatrix.validateBasicSolution(message)
@@ -247,13 +256,18 @@ func Solve(message Message) {
 		return
 	}
 	sourcesPotentials, consumerPotentials := basicSolutionMatrix.calculatePotentials(message)
-	fmt.Printf("sourcesPotentials: %v", sourcesPotentials)
-	fmt.Printf("consumerPotentials : %v", consumerPotentials)
+	log.Printf("sourcesPotentials: %v\n", sourcesPotentials)
+	log.Printf("consumerPotentials : %v\n", consumerPotentials)
 
+	foundOptimum := basicSolutionMatrix.calculateDifferencesForOptimum(
+		sourcesPotentials,
+		consumerPotentials,
+	)
+	if !foundOptimum {
+		log.Printf("return error here\n")
+	}
 	printPM(*basicSolutionMatrix)
-	fmt.Printf("sources in the end: %v", message.ProducersSources)
-
-	fmt.Println("done")
+	// fmt.Printf("sources in the end: %v", message.ProducersSources)
 }
 
 func TransportIssueHandler(resp http.ResponseWriter, req *http.Request) {
@@ -285,3 +299,22 @@ func TransportIssueHandler(resp http.ResponseWriter, req *http.Request) {
 		log.Printf("unsupported method: %s\n", req.Method)
 	}
 }
+
+// func main() {
+// 	msg := []byte(`{
+// 		"consumers_needs": [20, 30, 30, 10],
+// 		"producers_sources": [30, 40, 20],
+// 		"prices": [
+// 			[2, 3, 2, 4],
+// 			[3, 2, 5, 1],
+// 			[4, 3, 2, 6]
+// 		]
+// 	}`)
+
+// 	message := Message{}
+
+// 	if err := json.Unmarshal(msg, &message); err != nil {
+// 		panic(err)
+// 	}
+// 	Solve(message)
+// }

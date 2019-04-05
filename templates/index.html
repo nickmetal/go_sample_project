@@ -11,51 +11,64 @@
 
     <title>Hello, world!</title>
   </head>
+  <body>
 
-  <div id="notification_panel">
+  <div class="container">
+      <div class="col"><div id="notification_panel"></div></div>
+      <div class="col"><center><h3>Select Price Matrix size</h3></center></div>
+      <div class="col"><input id="rows_count" class="form-control" type="number" placeholder="Rows number"></div>
+      <div class="col"><input id="columns_count" class="form-control" type="number" placeholder="Columns number"></div>
+
+      <div class="col">
+        </br>
+        <button onclick="createMatrix()" type="button" class="btn btn-secondary">Create Price Matrix</button>
+        </br>
+      </div>
+
+      <div class="col">
+        <div id="app">
+          <div class="table-responsive">
+            <table class="table">
+              <thead class="thead-dark">
+                <tr>
+                  <th v-on:click="reverseMessage" scope="col">${message}</th>
+                  <th scope="col">First</th>
+                  <th scope="col">Last</th>
+                  <th scope="col">Handle</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">1</th>
+                  <td>Mark</td>
+                  <td>Otto</td>
+                  <td>@mdo</td>
+                </tr>
+                <tr>
+                  <th scope="row">2</th>
+                  <td>Jacob</td>
+                  <td>Thornton</td>
+                  <td>@fat</td>
+                </tr>
+                <tr>
+                  <th scope="row">3</th>
+                  <td>Larry</td>
+                  <td>the Bird</td>
+                  <td>@twitter</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      
+      </div>
   </div>
 
-  <center><h3>Select Price Matrix size</h3></center>
-  <input id="rows_count" class="form-control" type="number" placeholder="Rows number">
-  <input id="columns_count" class="form-control" type="number" placeholder="Columns number">
-  </br>
-  <button onclick="createMatrix()" type="button" class="btn btn-secondary">Create Price Matrix</button>
-  </br>
-  <body>
-    <div id="app">
-      <div class="table-responsive">
-        <table class="table">
-          <thead class="thead-dark">
-            <tr>
-              <th v-on:click="reverseMessage" scope="col">${message}</th>
-              <th scope="col">First</th>
-              <th scope="col">Last</th>
-              <th scope="col">Handle</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">1</th>
-              <td>Mark</td>
-              <td>Otto</td>
-              <td>@mdo</td>
-            </tr>
-            <tr>
-              <th scope="row">2</th>
-              <td>Jacob</td>
-              <td>Thornton</td>
-              <td>@fat</td>
-            </tr>
-            <tr>
-              <th scope="row">3</th>
-              <td>Larry</td>
-              <td>the Bird</td>
-              <td>@twitter</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+
+
+
+  
+  
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.10/dist/vue.js"></script>
     <script src="{{.StaticRoute}}js/main.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
