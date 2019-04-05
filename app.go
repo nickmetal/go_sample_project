@@ -1,63 +1,54 @@
 package main
 
 import (
-	"html/template"
+	"fmt"
+	"githome/yalatask/handlers"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
+	"runtime/debug"
+	"sync"
 )
 
 const (
-	INDEX_HTML_PATH    = "index.html"
-	TEMPLATES_DIR_PATH = "templates"
-	STATIC_DIR_PATH    = "/static/"
+	STATIC_DIR_PATH = "/static/"
 )
+
+// log to stderr request in [%s] - %s format: 2019/01/01 00:03:17 [POST] - /path/
+func LogRequest(methdoName, path string) {
+	log.Printf("[%s] - %s\n", methdoName, path)
+}
+
+// create a goroutine for each http request
+func Middleware(handler func(resp http.ResponseWriter, req *http.Request)) func(resp http.ResponseWriter, req *http.Request) {
+	return func(resp http.ResponseWriter, req *http.Request) {
+		LogRequest(req.Method, req.URL.Path)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func(wg *sync.WaitGroup) {
+			defer wg.Done()
+			defer Write500ErrorOnPanic(resp, req)
+			handler(resp, req)
+		}(&wg)
+		wg.Wait()
+	}
+}
+
+// catch panic and write error as 500 http error
+func Write500ErrorOnPanic(resp http.ResponseWriter, req *http.Request) {
+	if err := recover(); err != nil {
+		log.Printf("got a panic in %s: %v\n", req.URL.Path, err)
+		log.Println("stacktrace from panic: \n" + string(debug.Stack()))
+		http.Error(resp, fmt.Sprintf("Unhandled Error: %v", err), 500)
+	}
+}
 
 func main() {
 	fs := http.FileServer(http.Dir("static"))
 	http.Handle(STATIC_DIR_PATH, http.StripPrefix(STATIC_DIR_PATH, fs))
-	http.HandleFunc("/", serveTemplate)
-	http.HandleFunc("/api/", serveApi)
+	http.HandleFunc("/", Middleware(handlers.IndexPageHandler))
+	http.HandleFunc("/transport-issue/", Middleware(handlers.TransportIssueHandler))
 
 	log.Println("Listening...")
 	http.ListenAndServe(":3000", nil)
-}
-
-func serveApi(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("zbs"))
-}
-
-func serveTemplate(w http.ResponseWriter, r *http.Request) {
-	lp := filepath.Join(TEMPLATES_DIR_PATH, INDEX_HTML_PATH)
-	fp := filepath.Join(TEMPLATES_DIR_PATH, filepath.Clean(r.URL.Path))
-
-	// Return a 404 if the template doesn't exist
-	info, err := os.Stat(fp)
-	if err != nil {
-		if os.IsNotExist(err) {
-			http.NotFound(w, r)
-			return
-		}
-	}
-
-	// Return a 404 if the request is for a directory
-	if info.IsDir() {
-		http.NotFound(w, r)
-		return
-	}
-
-	tmpl, err := template.ParseFiles(lp, fp)
-	if err != nil {
-		// Log the detailed error
-		log.Println(err.Error())
-		// Return a generic "Internal Server Error" message
-		http.Error(w, http.StatusText(500), 500)
-		return
-	}
-
-	if err := tmpl.ExecuteTemplate(w, "index_page", nil); err != nil {
-		log.Println(err.Error())
-		http.Error(w, http.StatusText(500), 500)
-	}
 }
