@@ -9,10 +9,10 @@ $ docker run -it --rm --name apiservice_transport_solver -p 0.0.0.0:3000:3000 ap
 1. microservice +
 TODO - return json errors
 2. Logging +
-TODO - fix logs
+TODO - added logs for response
 3. Unit test - 
 4. Web Ui +-
-5. Deploy +
+5. Deploy -
 TODO - add service to DO
 
 #### Transportation issue results:
