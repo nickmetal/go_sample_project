@@ -1,13 +1,16 @@
+"use strict";
+
 const constants = {
     rowsCountID: 'rows_count',
     columnsCountID: 'columns_count',
     notificationPanelID: 'notification_panel',
-    priceMatrixSizeLimit: 3,
+    priceMatrixSizeLimit: 5,
     fadeOutTimeMS: 2000,
     errors: {
         INFO: "alert alert-info",
         ERROR: "alert alert-danger",
-    }
+    },
+    apiURL: '/transport-issue/',
 }
 
 const showError = (message) => showNotification(constants.errors.ERROR, message)
@@ -23,7 +26,7 @@ function showNotification(className, message) {
     divElement.setAttribute('role', 'alert');
     notificationPanel.appendChild(divElement);                    
     setTimeout(() => {
-        console.log(`expire notification: ${tempDivId}`)
+        console.debug(`expire notification: ${tempDivId}`)
         notificationPanel.removeChild(divElement)
     }, constants.fadeOutTimeMS);
 
@@ -61,51 +64,55 @@ function createMatrix() {
         return 
     }
 
-    showInfo(`create Matrix: ${rowsCount}x${columnCount}`)
+    showInfo(`create Matrix: ${rowsCount}x${columnCount}`);
+    createPriceHTMLTable()
 }
 
-// var app = new Vue({
-//     el: '#app',
-//     delimiters: ['${', '}'],
-//     data: {
-//       message: 'Hello Vue!'
-//     },
-//       methods: {
-//         reverseMessage: async function () {
-//           const requestData = {
-//             consumers_needs: [20, 30, 30, 10],
-//                  producers_sources: [30, 40, 20],
-//                  prices: [
-//                      [2, 3, 2, 4],
-//                      [3, 2, 5, 1],
-//               [4, 3, 2, 6],
-//             ],
-//           }
-//           const requestOptions = {
-//             method: "POST",
-//             headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-//             body: JSON.stringify(requestData)
-//          }
-//           const apiURL = `/transport-issue/`;
-//           //const apiURL = `'https://api.coindesk.com/v1/bpi/currentprice.json'`
-//           try {
-//             //debugger;
-//             const response = await fetch(apiURL, requestOptions);
-//             if (response.status !== 200) {
-//               const errorText = await response.text();
-//               console.log('res text', errorText)
-//               this.message = errorText;
-//               return 
-//             }
 
-//             const data = await response.text();
-//             console.log('res', data)
-//             this.message = data;
-//           } catch(err) {
-//             console.log('err', err)
-//             this.message = "error";
-//           }
+async function solveIssueRequest() {
+    const requestData = readValuesFromTable()
 
-//         }
-//   }
-//   })
+    const requestOptions = {
+        method: "POST",
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+        body: JSON.stringify(requestData)
+     }
+      const apiURL = constants.apiURL;
+      try {
+        const response = await fetch(apiURL, requestOptions);
+        if (response.status !== 200) {
+          const errorText = await response.text();
+          showError(`[${response.status}]: ${errorText}`)
+          return 
+        }
+        const data = await response.text();
+        showInfo(data)
+      } catch(err) {
+        showError(err)
+      }
+}
+
+
+function createPriceHTMLTable () {
+
+}
+function readValuesFromTable () {
+    // Example data
+    const requestData = {
+        consumers_needs: [20, 30, 30, 10],
+             producers_sources: [30, 40, 20],
+             prices: [
+                 [2, 3, 2, 4],
+                 [3, 2, 5, 1],
+                 [4, 3, 2, 6],
+        ],
+    }
+
+    // TODO fetch it from price table
+    // const requestData = {
+    //     consumers_needs: [],
+    //     producers_sources: [],
+    //     prices: [],
+    // }
+    return requestData
+}

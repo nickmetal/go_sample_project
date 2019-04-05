@@ -5,6 +5,7 @@ import (
 	"githome/yalatask/handlers"
 	"log"
 	"net/http"
+	"runtime/debug"
 	"sync"
 )
 
@@ -20,13 +21,13 @@ func LogRequest(methdoName, path string) {
 // create a goroutine for each http request
 func Middleware(handler func(resp http.ResponseWriter, req *http.Request)) func(resp http.ResponseWriter, req *http.Request) {
 	return func(resp http.ResponseWriter, req *http.Request) {
-		defer Write500ErrorOnPanic(resp, req)
 		LogRequest(req.Method, req.URL.Path)
 
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func(wg *sync.WaitGroup) {
 			defer wg.Done()
+			defer Write500ErrorOnPanic(resp, req)
 			handler(resp, req)
 		}(&wg)
 		wg.Wait()
@@ -37,6 +38,7 @@ func Middleware(handler func(resp http.ResponseWriter, req *http.Request)) func(
 func Write500ErrorOnPanic(resp http.ResponseWriter, req *http.Request) {
 	if err := recover(); err != nil {
 		log.Printf("got a panic in %s: %v\n", req.URL.Path, err)
+		log.Println("stacktrace from panic: \n" + string(debug.Stack()))
 		http.Error(resp, fmt.Sprintf("Unhandled Error: %v", err), 500)
 	}
 }

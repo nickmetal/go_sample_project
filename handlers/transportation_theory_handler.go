@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -45,7 +46,9 @@ type Message struct {
 	ConsumersNeeds   []float64   `json:"consumers_needs"`
 }
 
-func (pm *PriceMatrix) findBasicSolution(inputs Message) {
+func (pm *PriceMatrix) findBasicSolution(inputs Message) error {
+	log.Println("findBasicSolution")
+
 	matrix := *(pm)
 
 	for cId, column := range matrix {
@@ -58,8 +61,7 @@ func (pm *PriceMatrix) findBasicSolution(inputs Message) {
 
 			if inputs.ProducersSources[rId] < 0 {
 				item := matrix[rId][cId]
-				// todo return error
-				panic(fmt.Sprintf("ProducersSources is empty for (%v %v): %v\n", item.x, item.y, inputs.ProducersSources[rId]))
+				return fmt.Errorf("ProducersSources is empty for (%v %v): %v\n", item.x, item.y, inputs.ProducersSources[rId])
 			}
 
 			consumed := math.Min(inputs.ProducersSources[rId], inputs.ConsumersNeeds[cId])
@@ -67,22 +69,18 @@ func (pm *PriceMatrix) findBasicSolution(inputs Message) {
 			matrix[cId][rId] = cell
 
 			if inputs.ConsumersNeeds[cId] == 0 && rId == 0 {
-				// todo return error
-				panic(fmt.Sprintf("found cell with out needs: %s \n", cell))
+				return errors.New(fmt.Sprintf("found cell with out needs: %s \n", cell))
 			}
 
-			// printNeedsAndSourcesState(inputs)
 			inputs.ConsumersNeeds[cId] -= consumed
 			inputs.ProducersSources[rId] -= consumed
-			// printNeedsAndSourcesState(inputs)
-			// fmt.Println("")
 		}
-		// fmt.Println(strings.Repeat("===", 15))
 	}
+	return nil
 }
 
-func (m PriceMatrix) validateBasicSolution(message Message) []error {
-	errorSlice := make([]error, 0)
+func (m PriceMatrix) validateBasicSolution(message Message) error {
+	log.Println("validateBasicSolution")
 
 	// Проверка, что все поставщики израсходовали свои запасы
 	sourcesSum := 0.0
@@ -91,10 +89,7 @@ func (m PriceMatrix) validateBasicSolution(message Message) []error {
 	}
 
 	if sourcesSum != 0 {
-		errorSlice = append(
-			errorSlice,
-			fmt.Errorf("All sources should  be empty. Now total sum of sources: %g", sourcesSum),
-		)
+		return fmt.Errorf("All sources should  be empty. Now total sum of sources: %g", sourcesSum)
 	}
 
 	// Проверка, что все потребители получили желаемое количество единиц товара
@@ -104,10 +99,7 @@ func (m PriceMatrix) validateBasicSolution(message Message) []error {
 	}
 
 	if needsSum != 0 {
-		errorSlice = append(
-			errorSlice,
-			fmt.Errorf("All need should be empty. Now total sum of needs: %g", needsSum),
-		)
+		return fmt.Errorf("All need should be empty. Now total sum of needs: %g", needsSum)
 	}
 
 	/*
@@ -126,19 +118,14 @@ func (m PriceMatrix) validateBasicSolution(message Message) []error {
 	}
 
 	if basicCellNum < len(m)+len(m[0])-1 {
-		errorSlice = append(
-			errorSlice,
-			fmt.Errorf("basic plan вырожденный: basicCellNum: %d, m+n=%d", basicCellNum, len(m)+len(m[0])-1),
-		)
+		return fmt.Errorf("basic plan вырожденный: basicCellNum: %d, m+n=%d", basicCellNum, len(m)+len(m[0])-1)
 	}
-
-	if len(errorSlice) == 0 {
-		return nil
-	}
-	return errorSlice
+	return nil
 }
 
 func (m *PriceMatrix) calculateDifferencesForOptimum(sp *[]float64, cp *[]float64) bool {
+	log.Println("calculateDifferencesForOptimum")
+
 	sourcesPotentials := *sp
 	consumerPotentials := *cp
 	foundOptimum := true
@@ -149,15 +136,12 @@ func (m *PriceMatrix) calculateDifferencesForOptimum(sp *[]float64, cp *[]float6
 			if cell.consumed != 0 {
 				continue
 			}
-			// log.Printf("sourcesPotential: %v\n", sourcesPotentials[rId])
 			cellDifference := cell.price - sourcesPotentials[rId] - consumerPotentials[cId]
 			cell.cellDifference = cellDifference
 			(*m)[cId][rId] = cell
-			// log.Printf("[%s] [cellDifference %v]: p:%v sp:%v cp:%v\n", (*m)[cId][rId], cellDifference, cell.price, sourcesPotentials[rId], consumerPotentials[cId])
 
 			if cellDifference < 0 {
 				foundOptimum = false
-				// log.Printf("[%s] foundOptimum false with value: %v\n", (*m)[cId][rId], cellDifference)
 			}
 		}
 	}
@@ -209,15 +193,9 @@ func IntContainsInSlice(value int, s []int) bool {
 	return false
 }
 
-/*
-	TODOs
-	- check is input data do closed type problem (all need and sources are equaled)
-	- check counts needs and sources with prices col and rows num
-
-	column based matrix: slice of matrix columns
-*/
 func initPriceMatrix(m Message) *PriceMatrix {
-	// consumersNums := len(m.ConsumersNeeds)
+	log.Println("initPriceMatrix")
+
 	pm := make(PriceMatrix, 0)
 
 	for y, _ := range m.ConsumersNeeds {
@@ -232,42 +210,40 @@ func initPriceMatrix(m Message) *PriceMatrix {
 }
 
 func printPM(pm PriceMatrix) {
-	fmt.Println("priceMatrix")
+	log.Println("priceMatrix")
 
 	for _, row := range pm {
 		rows := []string{}
 		for _, col := range row {
 			rows = append(rows, fmt.Sprintf("%s\t", col))
 		}
-		fmt.Println(strings.Join(rows, ""))
+		log.Println(strings.Join(rows, ""))
 	}
 }
 
-func Solve(message Message) {
+func Solve(message Message) error {
 	basicSolutionMatrix := initPriceMatrix(message)
-	basicSolutionMatrix.findBasicSolution(message)
-	errorSlice := basicSolutionMatrix.validateBasicSolution(message)
-
-	if errorSlice != nil {
-		fmt.Println("Errors:")
-		for _, validationError := range errorSlice {
-			fmt.Println(validationError)
-		}
-		return
+	var err error
+	err = basicSolutionMatrix.findBasicSolution(message)
+	if err != nil {
+		return err
 	}
+	err = basicSolutionMatrix.validateBasicSolution(message)
+	if err != nil {
+		return err
+	}
+
 	sourcesPotentials, consumerPotentials := basicSolutionMatrix.calculatePotentials(message)
-	log.Printf("sourcesPotentials: %v\n", sourcesPotentials)
-	log.Printf("consumerPotentials : %v\n", consumerPotentials)
 
 	foundOptimum := basicSolutionMatrix.calculateDifferencesForOptimum(
 		sourcesPotentials,
 		consumerPotentials,
 	)
 	if !foundOptimum {
-		log.Printf("return error here\n")
+		return errors.New("unable to find optimum for input data")
 	}
 	printPM(*basicSolutionMatrix)
-	// fmt.Printf("sources in the end: %v", message.ProducersSources)
+	return nil
 }
 
 func TransportIssueHandler(resp http.ResponseWriter, req *http.Request) {
@@ -291,8 +267,12 @@ func TransportIssueHandler(resp http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		Solve(message)
-		resp.Write([]byte("{}"))
+		err = Solve(message)
+		if err == nil {
+			resp.Write([]byte("{\"data\": {}}"))
+		} else {
+			http.Error(resp, err.Error(), 400)
+		}
 
 	default:
 		http.Error(resp, "unsupported method", 400)
